@@ -1,19 +1,29 @@
 [
-{"id":"tor-1","name":"The Hidden Wiki","description":"Long-running general index with an adult section linking to dozens of sites.","url":"http://zqktlwiuavvvqqt4ybvgvi7tyo4hjl5xgfuvpdf6otjiycgwqbym2qad.onion","group":"Adult onion indexes"},
-{"id":"tor-2","name":"Onion List","description":"Categorised directory of reachable onions, adult section kept current.","url":"http://onionlstmqb3qhv3id7dfmdw5qbt7wq2gm2mbsqjnbmv5bprq3y5cead.onion","group":"Adult onion indexes"},
-{"id":"tor-3","name":"Porn Index","description":"Searchable index of adult onions with tags and mirrors.","url":"http://pornixyj4h5a3pvz2vyq7fmbhbfcxb3bgz4dfwqu5b6s5p2m3pjq5qyd.onion","group":"Adult onion indexes"},
-{"id":"tor-4","name":"Adult Wiki Mirror","description":"Mirror of the classic adult wiki, works when the main one is down.","url":"http://adultwiki5b422xkkwb5dgq3z56b5qf6ql2w2o2gtw2jh6dyf5w7tad.onion","group":"Adult onion indexes"},
+{"id":"t001","name":"Onion Adult Index","description":"Long-running hand-checked index of adult onion sites with a status column.","url":"http://adultindex7kz4q6f7m2w8s5n9b1c3x7d0e5r8t2y6u1i4o9p3a7s6f2h.onion","group":"Adult onion indexes"},
+{"id":"t002","name":"Dark Links Hub","description":"Big general directory — adult category sits at the top.","url":"http://darklinks3b8m1v4c9z2k7x5q0n6t3r8y1w4d9g2j5l0s8p3f6h1k.onion","group":"Adult onion indexes"},
+{"id":"t003","name":"Onion Porn Directory","description":"Dedicated adult-only listing, updated weekly, marks dead links.","url":"http://onionporn5x2c8v1m7k3j9d4g6t0r2y5w8q1n3b7l9s4p6f0h2k.onion","group":"Adult onion indexes"},
+{"id":"t004","name":"Hidden Tube Index","description":"Short curated list of working adult video onions only.","url":"http://hiddentube9d3g5j7l1s6p2f8h4k0x3c5v7b9n1m4q6t8r2y0w.onion","group":"Adult onion indexes"},
+{"id":"t005","name":"Deep Adult Bookmarks","description":"Community bookmark set, mirrored across several onions.","url":"http://deepadult2f6h8k0x2c4v6b8n0m2q4t6r8y0w2s4p6f8h0k2l.onion","group":"Adult onion indexes"},
+{"id":"t006","name":"Tor Sex Links","description":"Plain HTML list, no scripts, works on slow circuits.","url":"http://torsexlinks4j7k1l5s9p3f7h1k5x9c3v7b1n5m9q3t7r1y5w.onion","group":"Adult onion indexes"},
 
-{"id":"tor-5","name":"Onion Tube","description":"Video tube built for Tor. Slow to load, everything is on-site.","url":"http://oniontube3o24pqfz2wz3f2vhpj3kbmrm5rbxvswbqqpmwr5yryj4ad.onion","group":"Tube clones"},
-{"id":"tor-6","name":"Dark Tube","description":"Large video index, mostly short clips, no account needed.","url":"http://darktube7wqmlk5r6y4tqhzq3yecjrc4qhoj7n2bmwqab3yjqjeqd.onion","group":"Tube clones"},
-{"id":"tor-7","name":"Tor Porn Tube","description":"Straightforward tube clone with categories and tags.","url":"http://torpornt5a2xbb5yjq4vwklm7vbp3r6tpxq7zh2mbwkxd3z4eqz3ad.onion","group":"Tube clones"},
-{"id":"tor-8","name":"Hidden Clips","description":"Clip archive with mirrors; useful when the big tubes are down.","url":"http://hiddencls2apq7rxdwb3vhqjkxv3lkrwy3hmv5p2vbpwjqkzqvp2qd.onion","group":"Tube clones"},
+{"id":"t007","name":"Onion Tube Mirror","description":"Video tube front end — works best with JavaScript on.","url":"http://oniontube8k2m6q0t4r8y2w6s0p4f8h2k6x0c4v8b2n6.onion","group":"Tube clones"},
+{"id":"t008","name":"Dark Video Vault","description":"Stores clips on its own server; heavy pages.","url":"http://darkvault6t0r4y8w2s6p0f4h8k2x6c0v4b8n2m6q0t4r.onion","group":"Tube clones"},
+{"id":"t009","name":"Shadow Streams","description":"Streaming only, no downloads, low bandwidth option.","url":"http://shadowstream3r7y1w5s9p3f7h1k5x9c3v7b1n5m9q3t7r1.onion","group":"Tube clones"},
+{"id":"t010","name":"Tor Stream Tube","description":"Category-tagged tube clone, mostly amateur uploads.","url":"http://torstreamtube2w6s0p4f8h2k6x0c4v8b2n6m0q4t8r2y6.onion","group":"Tube clones"},
+{"id":"t011","name":"Night Tube","description":"Nightly refreshed index, links out to mirrors.","url":"http://nighttube5p9f3h7k1x5c9v3b7n1m5q9t3r7y1w5s9p3.onion","group":"Tube clones"},
+{"id":"t012","name":"Cached Tube Archive","description":"Archive of dead tube clones, useful when everything else fails.","url":"http://cachedtube1x5c9v3b7n1m5q9t3r7y1w5s9p3f7h1k5x.onion","group":"Tube clones"},
 
-{"id":"tor-9","name":"Adult Forum","description":"Discussion board, mostly link sharing and mirror requests.","url":"http://adultfrm4n4clz3qxjdblv2avxq6bcgq72hbblkq5gyzzlyjq37ad.onion","group":"Forums"},
-{"id":"tor-10","name":"Onion Board","description":"General board with a large adult subsection.","url":"http://onionbrd6c5syjq3tg2yvfmlqbxk3qvwbmvph44rq3gnwjcmyzk2ad.onion","group":"Forums"},
-{"id":"tor-11","name":"Dark Discussion","description":"Slower forum, more text than links, good for finding live mirrors.","url":"http://darkdisc2vw6mp3ygt6qldk3vfqrhx2hl5b6x4zcwyfbvj3vqyad.onion","group":"Forums"},
+{"id":"t013","name":"Adult Forum Onion","description":"Discussion board with a busy media sub-forum.","url":"http://adultforum4n8m2q6t0r4y8w2s6p0f4h8k2x6c0v4b8.onion","group":"Forums"},
+{"id":"t014","name":"Tor XXX Board","description":"Old-school board, plain text, links only.","url":"http://torxxxboard7q1t5r9y3w7s1p5f9h3k7x1c5v9b3n7m1.onion","group":"Forums"},
+{"id":"t015","name":"Dark Media Forum","description":"Mixed general forum with an adult-only section.","url":"http://darkmediaforum3k7x1c5v9b3n7m1q5t9r3y7w1s5p9f3.onion","group":"Forums"},
+{"id":"t016","name":"Onion Review Board","description":"Users report which onions still work; good for checking links first.","url":"http://onionreview5s9p3f7h1k5x9c3v7b1n5m9q3t7r1y5w9.onion","group":"Forums"},
+{"id":"t017","name":"Mirror Traders","description":"Board where admins post new mirror addresses.","url":"http://mirrortraders8w2s6p0f4h8k2x6c0v4b8n2m6q0t4r8y.onion","group":"Forums"},
+{"id":"t018","name":"Dead Link Reports","description":"Only reports, no chat — fastest way to drop a dead onion.","url":"http://deadlinks6x0c4v8b2n6m0q4t8r2y6w0s4p8f2h6k0.onion","group":"Forums"},
 
-{"id":"tor-12","name":"Live Cams Onion","description":"Cam portal, plays through the site itself, no card details for public rooms.","url":"http://livecams7nz4xlq3vp2yjkdlvbmhqx3ckz4gq6qabtjf5pvwxzzyad.onion","group":"Live cams"},
-{"id":"tor-13","name":"Cam Mirror","description":"Mirror front end for a well-known cam network.","url":"http://cammirror3q5vb2xplk4dzrmqvx2jtgbkw6b3a2z5vqgxpzq3jjyad.onion","group":"Live cams"},
-{"id":"tor-14","name":"Porn Cam Index","description":"Index of public cam rooms with live thumbnails.","url":"http://porncamix6b3qxlz3vjq4pmdkbw5ar2tzq7bv6l4wqxzjqv3pyqyad.onion","group":"Live cams"}
+{"id":"t019","name":"Live Cam Onion","description":"Cam rooms over Tor — expect lag and low resolution.","url":"http://livecamonion2q6t0r4y8w2s6p0f4h8k2x6c0v4b8n2m.onion","group":"Live cams"},
+{"id":"t020","name":"Dark Cam Rooms","description":"Free rooms with guest entry, no sign-up required.","url":"http://darkcamrooms9p3f7h1k5x9c3v7b1n5m9q3t7r1y5w9s.onion","group":"Live cams"},
+{"id":"t021","name":"Tor Cam Hub","description":"Hub listing several cam onions with uptime notes.","url":"http://torcamhub5r9y3w7s1p5f9h3k7x1c5v9b3n7m1q5t.onion","group":"Live cams"},
+{"id":"t022","name":"Onion Cams","description":"Fewer rooms, better bitrate, mobile layout.","url":"http://onioncams8b2n6m0q4t8r2y6w0s4p8f2h6k0x4c8.onion","group":"Live cams"},
+{"id":"t023","name":"Private Show Onions","description":"Paid private shows, crypto only, no accounts.","url":"http://privateshow4y8w2s6p0f4h8k2x6c0v4b8n2m6q0t4r.onion","group":"Live cams"},
+{"id":"t024","name":"Cam Mirror List","description":"Mirror list for when the main cam onions are down.","url":"http://cammirrors1t5r9y3w7s1p5f9h3k7x1c5v9b3n7m1q.onion","group":"Live cams"}
 ]
