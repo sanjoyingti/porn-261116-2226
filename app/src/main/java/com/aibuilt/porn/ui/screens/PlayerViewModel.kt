@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -26,20 +27,8 @@ class PlayerViewModel(
     val related: StateFlow<List<VideoItem>> = _related.asStateFlow()
 
     val isFavorite: StateFlow<Boolean> = repo.favoriteIds
+        .map { ids -> videoId in ids }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
-        .let { flow ->
-            kotlinx.coroutines.flow.combine(flow, _video) { _, _ -> }
-                .let { _ -> favoriteState() }
-        }
-
-    private fun favoriteState(): StateFlow<Boolean> = repo.favoriteIds
-        .let { ids ->
-            val state = MutableStateFlow(false)
-            viewModelScope.launch {
-                ids.collect { set -> state.value = videoId in set }
-            }
-            state.asStateFlow()
-        }
 
     init {
         viewModelScope.launch {

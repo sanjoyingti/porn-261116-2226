@@ -1,14 +1,15 @@
-=== ABOUT: The in-app player: finishes the WebView setup, strips floating ads and overlays, and keeps fullscreen and back handling working ===
 package com.aibuilt.porn.ui.screens
 
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.ActivityInfo
 import android.graphics.Color as AndroidColor
+import android.os.Message
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
@@ -82,6 +83,58 @@ import com.aibuilt.porn.util.formatViews
 import com.aibuilt.porn.util.openBrowser
 import kotlinx.coroutines.delay
 
+private const val MOBILE_UA =
+    "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) " +
+        "Chrome/124.0.0.0 Mobile Safari/537.36"
+
+private val INTERNAL_HOSTS = listOf(
+    "pornhub.com", "xhamster.com", "eporner.com", "spankbang.com", "xnxx.com",
+    "txxx.com", "hqporner.com", "youporn.com", "youtube.com", "youtu.be",
+    "dailymotion.com", "dai.ly", "ok.ru", "vk.com", "archive.org"
+)
+
+private const val CLEANUP_JS = """
+(function(){
+  var css = [
+    '.mgid','.ad','.ads','.ad-container','.advertisement','.adsbygoogle',
+    '[id^="ad_"]','[id*="banner"]','.popup','.overlay','.modal','.subscribe',
+    '.app-banner','.download-app','.sticky-banner','.ph-app-banner','.js_appBanner',
+    '.promoBanner','.xhamster-ad','.advertisment','.cookie-banner','.topBanner'
+  ].join(',') + '{display:none !important;visibility:hidden !important;height:0 !important;}';
+  var style = document.createElement('style');
+  style.type = 'text/css';
+  style.appendChild(document.createTextNode(css));
+  (document.head || document.documentElement).appendChild(style);
+  var noise = ['.overlay','.popup','.modal','.ad','.ads','.banner','.promo','.cookies'];
+  function strip(){
+    try {
+      noise.forEach(function(sel){
+        var list = document.querySelectorAll(sel);
+        for (var i = 0; i < list.length; i++) {
+          var el = list[i];
+          if (el.querySelector('video') || el.querySelector('iframe')) continue;
+          var r = el.getBoundingClientRect();
+          if (r.width < 40 || r.height < 40) el.style.setProperty('display','none','important');
+        }
+      });
+      var blocks = document.querySelectorAll('body > div');
+      for (var j = 0; j < blocks.length; j++) {
+        var b = blocks[j];
+        if (b.querySelector('video') || b.querySelector('iframe')) continue;
+        var rr = b.getBoundingClientRect();
+        if (rr.top > window.innerHeight * 0.7) b.style.setProperty('display','none','important');
+      }
+      var vids = document.querySelectorAll('video');
+      for (var k = 0; k < vids.length; k++) { vids[k].setAttribute('playsinline',''); }
+    } catch (e) {}
+  }
+  strip();
+  setTimeout(strip, 1200);
+  setTimeout(strip, 3500);
+  setTimeout(strip, 7000);
+})();
+"""
+
 @Composable
 fun PlayerScreen(
     vm: PlayerViewModel,
@@ -98,6 +151,7 @@ fun PlayerScreen(
     var failed by remember { mutableStateOf(false) }
     var progress by remember { mutableIntStateOf(0) }
     var loaded by remember { mutableStateOf(false) }
+    var reloadKey by remember { mutableIntStateOf(0) }
     var webView by remember { mutableStateOf<WebView?>(null) }
 
     val activity = remember(context) { context.findActivity() }
@@ -131,7 +185,7 @@ fun PlayerScreen(
         }
     }
 
-    LaunchedEffect(video?.id, failed) {
+    LaunchedEffect(video?.id, failed, reloadKey) {
         val current = video
         if (current == null || failed) return@LaunchedEffect
         loaded = false
@@ -158,7 +212,7 @@ fun PlayerScreen(
             ) {
                 val current = video
                 if (current != null && !failed) {
-                    key(current.id) {
+                    key(current.id, reloadKey) {
                         AndroidView(
                             modifier = Modifier.fillMaxSize(),
                             factory = { ctx ->
@@ -192,16 +246,18 @@ fun PlayerScreen(
                     )
                 }
 
-                IconButton(
-                    onClick = { fullscreen = !fullscreen },
-                    modifier = Modifier.align(Alignment.TopEnd)
-                ) {
-                    Icon(
-                        imageVector = if (fullscreen) Icons.Filled.FullscreenExit
-                        else Icons.Filled.Fullscreen,
-                        contentDescription = if (fullscreen) "Exit fullscreen" else "Fullscreen",
-                        tint = Color.White
-                    )
+                if (!failed) {
+                    IconButton(
+                        onClick = { fullscreen = !fullscreen },
+                        modifier = Modifier.align(Alignment.TopEnd)
+                    ) {
+                        Icon(
+                            imageVector = if (fullscreen) Icons.Filled.FullscreenExit
+                            else Icons.Filled.Fullscreen,
+                            contentDescription = if (fullscreen) "Exit fullscreen" else "Fullscreen",
+                            tint = Color.White
+                        )
+                    }
                 }
             }
 
@@ -306,22 +362,28 @@ fun PlayerScreen(
                         textAlign = TextAlign.Center,
                         modifier = Modifier.padding(top = 10.dp, bottom = 18.dp)
                     )
-                    Button(onClick = { context.openBrowser(current.watchUrl) }) {
+                    Text(
+                        text = "${current.source} · ${formatDuration(current.duration)} · ${current.category}",
+                        color = TextSecondary,
+                        fontSize = 12.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(bottom = 18.dp)
+                    )
+                    Button(
+                        onClick = { context.openBrowser(current.watchUrl) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
                         Text("Open in browser")
                     }
                     TextButton(onClick = {
                         failed = false
-                        progress = 0
-                        loaded = false
-                    }) { Text("Try again") }
-                    TextButton(onClick = onBack) { Text("Back") }
-                    Text(
-                        text = "The link was marked as dead. Hide the entry to drop it from the feed.",
-                        color = TextSecondary,
-                        fontSize = 11.sp,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(top = 14.dp)
-                    )
+                        reloadKey += 1
+                    }) {
+                        Text("Try again in the app")
+                    }
+                    TextButton(onClick = onBack) {
+                        Text("Back")
+                    }
                 }
             }
         }
@@ -332,7 +394,7 @@ fun PlayerScreen(
 private fun RelatedCard(item: VideoItem, onClick: () -> Unit) {
     Column(
         modifier = Modifier
-            .width(170.dp)
+            .width(160.dp)
             .clickable(onClick = onClick)
     ) {
         Box(
@@ -368,90 +430,8 @@ private fun RelatedCard(item: VideoItem, onClick: () -> Unit) {
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = 4.dp)
         )
-        Text(text = item.source, color = TextSecondary, fontSize = 10.sp)
     }
 }
-
-private val INTERNAL_HOSTS = listOf(
-    "pornhub.com", "phncdn.com", "xhamster", "eporner", "spankbang", "txxx", "xnxx",
-    "hqporner", "youporn", "youtube.com", "youtu.be", "ytimg.com", "dailymotion", "ok.ru",
-    "vk.com", "archive.org", "about:blank"
-)
-
-private fun isInternal(url: String): Boolean =
-    INTERNAL_HOSTS.any { url.contains(it, ignoreCase = true) }
-
-private const val MOBILE_UA =
-    "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) " +
-        "Chrome/124.0.0.0 Mobile Safari/537.36"
-
-private const val CLEANER_JS = """
-(function() {
-  if (window.__paCleaner) { return; }
-  window.__paCleaner = true;
-  var css = 'html,body{background:#000 !important;margin:0 !important;}' +
-            '::-webkit-scrollbar{width:0;height:0;}';
-  var style = document.createElement('style');
-  style.type = 'text/css';
-  style.appendChild(document.createTextNode(css));
-  (document.head || document.documentElement).appendChild(style);
-
-  var bad = ['advert','adbox','ad-container','ad_container','-ads','_ads','ads-','ads_',
-             'adbanner','ad_banner','adunit','ad-unit','sponsor','overlay','popup','pop-up',
-             'banner','subscribe','downloadapp','download-app','appbanner','app-banner',
-             'upsell','promo','consent','gdpr','cookie','interstitial','notif','smartbar',
-             'paywall','teaser','sticky'];
-
-  function hide(el) {
-    if (!el) { return; }
-    el.setAttribute('data-pa', '1');
-    el.style.setProperty('display', 'none', 'important');
-  }
-
-  function signature(el) {
-    var cls = (typeof el.className === 'string') ? el.className : '';
-    return ((el.id || '') + ' ' + cls + ' ' + (el.getAttribute('data-name') || '') + ' ' +
-            (el.getAttribute('aria-label') || '')).toLowerCase();
-  }
-
-  function scan() {
-    if (!document.body) { return; }
-    var nodes = document.body.querySelectorAll('div,aside,section,ins,iframe,span,a');
-    for (var i = 0; i < nodes.length; i++) {
-      var el = nodes[i];
-      if (el.getAttribute('data-pa') === '1') { continue; }
-      if (el.tagName === 'VIDEO') { continue; }
-      if (el.querySelector && el.querySelector('video')) { continue; }
-      var rect = el.getBoundingClientRect();
-      if (el.tagName === 'IFRAME') {
-        if (rect.width > 320 && rect.height > 180) { continue; }
-        hide(el);
-        continue;
-      }
-      var sig = signature(el);
-      var named = false;
-      for (var j = 0; j < bad.length; j++) {
-        if (sig.indexOf(bad[j]) !== -1) { named = true; break; }
-      }
-      var st = window.getComputedStyle(el);
-      var floating = (st.position === 'fixed' || st.position === 'sticky');
-      var z = parseInt(st.zIndex || '0', 10) || 0;
-      var huge = rect.width > window.innerWidth * 0.8 && rect.height > window.innerHeight * 0.4;
-      if (named || (floating && z > 900) || (floating && huge)) {
-        hide(el);
-      }
-    }
-  }
-
-  scan();
-  var runs = 0;
-  var timer = setInterval(function() {
-    scan();
-    runs++;
-    if (runs > 30) { clearInterval(timer); }
-  }, 700);
-})();
-""";
 
 @SuppressLint("SetJavaScriptEnabled")
 private fun buildWebView(
@@ -463,65 +443,96 @@ private fun buildWebView(
     onFail: () -> Unit,
     onExternal: (String) -> Unit
 ): WebView {
-    val web = WebView(context)
-    web.setBackgroundColor(AndroidColor.BLACK)
-    web.settings.apply {
+    val view = WebView(context)
+    view.setBackgroundColor(AndroidColor.BLACK)
+
+    view.settings.apply {
         javaScriptEnabled = true
         domStorageEnabled = true
         databaseEnabled = true
         mediaPlaybackRequiresUserGesture = false
+        mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
         loadWithOverviewMode = true
         useWideViewPort = true
         builtInZoomControls = false
         displayZoomControls = false
-        mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-        javaScriptCanOpenWindowsAutomatically = false
         setSupportMultipleWindows(false)
+        javaScriptCanOpenWindowsAutomatically = true
         userAgentString = MOBILE_UA
-        cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+        allowFileAccess = true
+        cacheMode = WebSettings.LOAD_DEFAULT
     }
+
     CookieManager.getInstance().apply {
         setAcceptCookie(true)
-        setAcceptThirdPartyCookies(web, true)
+        setAcceptThirdPartyCookies(view, true)
     }
 
-    web.webChromeClient = object : WebChromeClient() {
-        override fun onProgressChanged(view: WebView?, newProgress: Int) {
+    onCreated(view)
+
+    view.webChromeClient = object : WebChromeClient() {
+        override fun onProgressChanged(v: WebView?, newProgress: Int) {
             onProgress(newProgress)
+            if (newProgress >= 90) onLoaded()
         }
+
+        override fun onCreateWindow(
+            v: WebView?,
+            isDialog: Boolean,
+            isUserGesture: Boolean,
+            resultMsg: Message?
+        ): Boolean = false
     }
 
-    web.webViewClient = object : WebViewClient() {
+    view.webViewClient = object : WebViewClient() {
         override fun shouldOverrideUrlLoading(
-            view: WebView?,
+            v: WebView?,
             request: WebResourceRequest?
         ): Boolean {
             val url = request?.url?.toString() ?: return false
-            return if (url.startsWith("http") && !isInternal(url)) {
-                onExternal(url)
-                true
-            } else {
-                false
-            }
+            return handleUrl(url, onExternal)
         }
 
-        override fun onPageFinished(view: WebView?, url: String?) {
-            super.onPageFinished(view, url)
+        @Deprecated("Legacy override")
+        override fun shouldOverrideUrlLoading(v: WebView?, url: String?): Boolean {
+            val target = url ?: return false
+            return handleUrl(target, onExternal)
+        }
+
+        override fun onPageFinished(v: WebView?, url: String?) {
+            super.onPageFinished(v, url)
+            v?.evaluateJavascript(CLEANUP_JS, null)
             onLoaded()
-            view?.evaluateJavascript(CLEANER_JS, null)
         }
 
         override fun onReceivedError(
-            view: WebView?,
+            v: WebView?,
             request: WebResourceRequest?,
             error: WebResourceError?
         ) {
-            super.onReceivedError(view, request, error)
             if (request?.isForMainFrame == true) onFail()
         }
     }
 
-    web.loadUrl(embed)
-    onCreated(web)
-    return web
+    view.loadUrl(embed)
+    return view
+}
+
+private fun handleUrl(url: String, onExternal: (String) -> Unit): Boolean {
+    if (url.startsWith("intent:") || url.startsWith("market:") ||
+        url.startsWith("tg:") || url.startsWith("mailto:")
+    ) {
+        onExternal(url)
+        return true
+    }
+    if (!url.startsWith("http")) return false
+    if (url.contains(".onion")) {
+        onExternal(url)
+        return true
+    }
+    val host = runCatching { java.net.URI(url).host.orEmpty() }.getOrDefault("")
+    val internal = INTERNAL_HOSTS.any { host.endsWith(it) }
+    if (internal) return false
+    onExternal(url)
+    return true
 }
