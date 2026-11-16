@@ -5,20 +5,24 @@ import android.content.Context
 import android.content.pm.ActivityInfo
 import android.graphics.Color as AndroidColor
 import android.os.Message
+import android.view.View
+import android.view.ViewGroup
+import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.webkit.CookieManager
+import android.webkit.CustomViewCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -135,6 +139,104 @@ private const val CLEANUP_JS = """
 })();
 """
 
+private fun isInternal(url: String): Boolean = INTERNAL_HOSTS.any { url.contains(it, true) }
+
+@SuppressLint("SetJavaScriptEnabled")
+private fun createWebView(
+    context: Context,
+    embed: String,
+    onCreated: (WebView) -> Unit,
+    onProgress: (Int) -> Unit,
+    onLoaded: () -> Unit,
+    onFail: () -> Unit,
+    onExternal: (String) -> Unit
+): WebView {
+    val web = WebView(context)
+    var customView: View? = null
+
+    with(web.settings) {
+        javaScriptEnabled = true
+        domStorageEnabled = true
+        databaseEnabled = true
+        mediaPlaybackRequiresUserGesture = false
+        javaScriptCanOpenWindowsAutomatically = false
+        useWideViewPort = true
+        loadWithOverviewMode = true
+        userAgentString = MOBILE_UA
+        mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+        cacheMode = WebSettings.LOAD_DEFAULT
+    }
+    web.setBackgroundColor(AndroidColor.BLACK)
+    CookieManager.getInstance().apply {
+        setAcceptCookie(true)
+        setAcceptThirdPartyCookies(web, true)
+    }
+
+    web.webChromeClient = object : WebChromeClient() {
+        override fun onProgressChanged(view: WebView?, newProgress: Int) {
+            onProgress(newProgress)
+        }
+
+        override fun onCreateWindow(
+            view: WebView,
+            isDialog: Boolean,
+            isUserGesture: Boolean,
+            resultMsg: Message
+        ): Boolean {
+            val transport = resultMsg.obj as? WebView.WebViewTransport ?: return false
+            transport.webView = view
+            resultMsg.sendToTarget()
+            return true
+        }
+
+        override fun onShowCustomView(view: View, callback: CustomViewCallback) {
+            val activity = context.findActivity() ?: return
+            val root = activity.window.decorView as? ViewGroup ?: return
+            customView = view
+            root.addView(view, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        }
+
+        override fun onHideCustomView() {
+            val activity = context.findActivity() ?: return
+            val root = activity.window.decorView as? ViewGroup ?: return
+            val view = customView ?: return
+            root.removeView(view)
+            customView = null
+        }
+    }
+
+    web.webViewClient = object : WebViewClient() {
+        override fun shouldOverrideUrlLoading(
+            view: WebView,
+            request: WebResourceRequest
+        ): Boolean {
+            val url = request.url.toString()
+            if (url.startsWith("http") && !isInternal(url)) {
+                onExternal(url)
+                return true
+            }
+            return false
+        }
+
+        override fun onPageFinished(view: WebView, url: String) {
+            view.evaluateJavascript(CLEANUP_JS, null)
+            onLoaded()
+        }
+
+        override fun onReceivedError(
+            view: WebView,
+            request: WebResourceRequest,
+            error: WebResourceError
+        ) {
+            if (request.isForMainFrame) onFail()
+        }
+    }
+
+    onCreated(web)
+    web.loadUrl(embed)
+    return web
+}
+
 @Composable
 fun PlayerScreen(
     vm: PlayerViewModel,
@@ -182,12 +284,12 @@ fun PlayerScreen(
         onDispose {
             webView?.loadUrl("about:blank")
             webView?.destroy()
+            webView = null
         }
     }
 
     LaunchedEffect(video?.id, failed, reloadKey) {
-        val current = video
-        if (current == null || failed) return@LaunchedEffect
+        if (video == null || failed) return@LaunchedEffect
         loaded = false
         progress = 0
         delay(15_000)
@@ -203,50 +305,57 @@ fun PlayerScreen(
                 .fillMaxSize()
                 .verticalScroll(scroll)
         ) {
-            Box(
-                modifier = (if (fullscreen) Modifier.fillMaxSize()
-                else Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(16f / 9f))
-                    .background(Color.Black)
-            ) {
-                val current = video
-                if (current != null && !failed) {
-                    key(current.id, reloadKey) {
-                        AndroidView(
-                            modifier = Modifier.fillMaxSize(),
-                            factory = { ctx ->
-                                buildWebView(
-                                    context = ctx,
-                                    embed = current.embed,
-                                    onCreated = { webView = it },
-                                    onProgress = { progress = it },
-                                    onLoaded = { loaded = true },
-                                    onFail = { failed = true },
-                                    onExternal = { url -> context.openBrowser(url) }
-                                )
-                            }
+            if (!failed) {
+                Box(
+                    modifier = (if (fullscreen) Modifier.fillMaxSize()
+                    else Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f))
+                        .background(Color.Black)
+                ) {
+                    val current = video
+                    if (current != null) {
+                        key(current.id, reloadKey) {
+                            AndroidView(
+                                modifier = Modifier.fillMaxSize(),
+                                factory = { ctx ->
+                                    createWebView(
+                                        context = ctx,
+                                        embed = current.embed,
+                                        onCreated = { webView = it },
+                                        onProgress = { progress = it },
+                                        onLoaded = { loaded = true },
+                                        onFail = { failed = true },
+                                        onExternal = { url -> context.openBrowser(url) }
+                                    )
+                                }
+                            )
+                        }
+                    } else {
+                        CircularProgressIndicator(
+                            color = Orange,
+                            modifier = Modifier.align(Alignment.Center)
                         )
                     }
-                } else if (current == null) {
-                    CircularProgressIndicator(
-                        color = Orange,
-                        modifier = Modifier.align(Alignment.Center)
-                    )
-                }
 
-                if (progress in 1..99 && !failed) {
-                    LinearProgressIndicator(
-                        progress = { progress / 100f },
-                        color = Orange,
-                        trackColor = Color.Transparent,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .align(Alignment.TopCenter)
-                    )
-                }
+                    if (progress in 1..99) {
+                        LinearProgressIndicator(
+                            progress = { progress / 100f },
+                            color = Orange,
+                            trackColor = Color.Transparent,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .align(Alignment.TopCenter)
+                        )
+                    }
 
-                if (!failed) {
+                    if (!loaded && current != null) {
+                        CircularProgressIndicator(
+                            color = Orange,
+                            modifier = Modifier.align(Alignment.Center)
+                        )
+                    }
+
                     IconButton(
                         onClick = { fullscreen = !fullscreen },
                         modifier = Modifier.align(Alignment.TopEnd)
@@ -277,7 +386,9 @@ fun PlayerScreen(
                             text = current?.title ?: "Loading…",
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp,
-                            color = MaterialTheme.colorScheme.onBackground
+                            color = MaterialTheme.colorScheme.onBackground,
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis
                         )
                         if (current != null) {
                             Text(
@@ -318,74 +429,40 @@ fun PlayerScreen(
 
                 if (autoplayRelated && related.isNotEmpty()) {
                     Text(
-                        text = "Related",
+                        text = "Related videos",
                         color = MaterialTheme.colorScheme.onBackground,
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp,
-                        modifier = Modifier.padding(start = 14.dp, top = 12.dp)
+                        modifier = Modifier.padding(start = 14.dp, top = 12.dp, bottom = 6.dp)
                     )
                     LazyRow(
-                        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 20.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                            horizontal = 14.dp
+                        ),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.padding(bottom = 20.dp)
                     ) {
                         items(related, key = { it.id }) { item ->
                             RelatedCard(item = item, onClick = { onOpenVideo(item) })
                         }
                     }
                 } else {
-                    Box(modifier = Modifier.padding(20.dp))
+                    Box(modifier = Modifier.padding(bottom = 20.dp))
                 }
             }
         }
 
-        val current = video
-        if (failed && current != null) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(NearBlack)
-                    .padding(28.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = current.title,
-                        color = MaterialTheme.colorScheme.onBackground,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp,
-                        textAlign = TextAlign.Center
-                    )
-                    Text(
-                        text = "This scene can't play inside the app.",
-                        color = TextSecondary,
-                        fontSize = 13.sp,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(top = 10.dp, bottom = 18.dp)
-                    )
-                    Text(
-                        text = "${current.source} · ${formatDuration(current.duration)} · ${current.category}",
-                        color = TextSecondary,
-                        fontSize = 12.sp,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(bottom = 18.dp)
-                    )
-                    Button(
-                        onClick = { context.openBrowser(current.watchUrl) },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Open in browser")
-                    }
-                    TextButton(onClick = {
-                        failed = false
-                        reloadKey += 1
-                    }) {
-                        Text("Try again in the app")
-                    }
-                    TextButton(onClick = onBack) {
-                        Text("Back")
-                    }
-                }
-            }
+        if (failed) {
+            FallbackPanel(
+                title = video?.title ?: "This scene can't play inside the app",
+                onRetry = {
+                    failed = false
+                    loaded = false
+                    reloadKey += 1
+                },
+                onBrowser = { video?.let { context.openBrowser(it.watchUrl) } },
+                onBack = onBack
+            )
         }
     }
 }
@@ -410,22 +487,11 @@ private fun RelatedCard(item: VideoItem, onClick: () -> Unit) {
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
             )
-            Text(
-                text = formatDuration(item.duration),
-                color = Color.White,
-                fontSize = 10.sp,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(4.dp)
-                    .clip(RoundedCornerShape(3.dp))
-                    .background(Color.Black.copy(alpha = 0.7f))
-                    .padding(horizontal = 4.dp, vertical = 1.dp)
-            )
         }
         Text(
             text = item.title,
             color = MaterialTheme.colorScheme.onBackground,
-            fontSize = 12.sp,
+            fontSize = 11.sp,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = 4.dp)
@@ -433,106 +499,59 @@ private fun RelatedCard(item: VideoItem, onClick: () -> Unit) {
     }
 }
 
-@SuppressLint("SetJavaScriptEnabled")
-private fun buildWebView(
-    context: Context,
-    embed: String,
-    onCreated: (WebView) -> Unit,
-    onProgress: (Int) -> Unit,
-    onLoaded: () -> Unit,
-    onFail: () -> Unit,
-    onExternal: (String) -> Unit
-): WebView {
-    val view = WebView(context)
-    view.setBackgroundColor(AndroidColor.BLACK)
-
-    view.settings.apply {
-        javaScriptEnabled = true
-        domStorageEnabled = true
-        databaseEnabled = true
-        mediaPlaybackRequiresUserGesture = false
-        mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-        loadWithOverviewMode = true
-        useWideViewPort = true
-        builtInZoomControls = false
-        displayZoomControls = false
-        setSupportMultipleWindows(false)
-        javaScriptCanOpenWindowsAutomatically = true
-        userAgentString = MOBILE_UA
-        allowFileAccess = true
-        cacheMode = WebSettings.LOAD_DEFAULT
-    }
-
-    CookieManager.getInstance().apply {
-        setAcceptCookie(true)
-        setAcceptThirdPartyCookies(view, true)
-    }
-
-    onCreated(view)
-
-    view.webChromeClient = object : WebChromeClient() {
-        override fun onProgressChanged(v: WebView?, newProgress: Int) {
-            onProgress(newProgress)
-            if (newProgress >= 90) onLoaded()
-        }
-
-        override fun onCreateWindow(
-            v: WebView?,
-            isDialog: Boolean,
-            isUserGesture: Boolean,
-            resultMsg: Message?
-        ): Boolean = false
-    }
-
-    view.webViewClient = object : WebViewClient() {
-        override fun shouldOverrideUrlLoading(
-            v: WebView?,
-            request: WebResourceRequest?
-        ): Boolean {
-            val url = request?.url?.toString() ?: return false
-            return handleUrl(url, onExternal)
-        }
-
-        @Deprecated("Legacy override")
-        override fun shouldOverrideUrlLoading(v: WebView?, url: String?): Boolean {
-            val target = url ?: return false
-            return handleUrl(target, onExternal)
-        }
-
-        override fun onPageFinished(v: WebView?, url: String?) {
-            super.onPageFinished(v, url)
-            v?.evaluateJavascript(CLEANUP_JS, null)
-            onLoaded()
-        }
-
-        override fun onReceivedError(
-            v: WebView?,
-            request: WebResourceRequest?,
-            error: WebResourceError?
-        ) {
-            if (request?.isForMainFrame == true) onFail()
-        }
-    }
-
-    view.loadUrl(embed)
-    return view
-}
-
-private fun handleUrl(url: String, onExternal: (String) -> Unit): Boolean {
-    if (url.startsWith("intent:") || url.startsWith("market:") ||
-        url.startsWith("tg:") || url.startsWith("mailto:")
+@Composable
+private fun FallbackPanel(
+    title: String,
+    onRetry: () -> Unit,
+    onBrowser: () -> Unit,
+    onBack: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(NearBlack)
     ) {
-        onExternal(url)
-        return true
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 4.dp, top = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    tint = Color.White
+                )
+            }
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "This scene can't play inside the app",
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp,
+                textAlign = TextAlign.Center
+            )
+            Text(
+                text = title,
+                color = TextSecondary,
+                fontSize = 13.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 10.dp, bottom = 24.dp)
+            )
+            Button(onClick = onBrowser, modifier = Modifier.fillMaxWidth()) {
+                Text("Open in browser")
+            }
+            TextButton(onClick = onRetry, modifier = Modifier.padding(top = 4.dp)) {
+                Text("Try loading again")
+            }
+        }
     }
-    if (!url.startsWith("http")) return false
-    if (url.contains(".onion")) {
-        onExternal(url)
-        return true
-    }
-    val host = runCatching { java.net.URI(url).host.orEmpty() }.getOrDefault("")
-    val internal = INTERNAL_HOSTS.any { host.endsWith(it) }
-    if (internal) return false
-    onExternal(url)
-    return true
 }
